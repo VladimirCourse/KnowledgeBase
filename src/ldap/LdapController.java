@@ -1,5 +1,10 @@
 package ldap;
 
+import exceptions.ldapexception.LdapException;
+import exceptions.ldapexception.UserAlreadyExistsException;
+import exceptions.ldapexception.WrongPasswordException;
+import exceptions.ldapexception.WrongUsernameException;
+
 import javax.naming.Context;
 import javax.naming.NamingEnumeration;
 import javax.naming.directory.*;
@@ -11,6 +16,9 @@ public class LdapController {
 
     private final String ldapURI = "ldap://localhost";
     private final String contextFactory = "com.sun.jndi.ldap.LdapCtxFactory";
+    private final String adminName = "admin";
+    private final String adminPass = "12345";
+    private final String domain = "dc=db,dc=test";
 
     public static LdapController getInstance() {
         LdapController localInstance = instance;
@@ -44,7 +52,7 @@ public class LdapController {
         String filter = "(uid=" + user + ")";
         SearchControls ctrl = new SearchControls();
         ctrl.setSearchScope(SearchControls.SUBTREE_SCOPE);
-        NamingEnumeration answer = ctx.search("dc=db,dc=test", filter, ctrl);
+        NamingEnumeration answer = ctx.search(domain, filter, ctrl);
 
         String dn;
         if (answer.hasMore()) {
@@ -62,7 +70,7 @@ public class LdapController {
     public void authenticate (String username, String password) throws Exception {
         String uid = getUid(username);
         if (uid == null){
-            throw new Exception("Error: username not exists!");
+            throw new WrongUsernameException();
         }
         Hashtable<String,String> env = new Hashtable <String, String>();
         env.put(Context.SECURITY_AUTHENTICATION, "simple");
@@ -73,7 +81,7 @@ public class LdapController {
             ldapContext(env);
         }
         catch (javax.naming.AuthenticationException e) {
-            throw new Exception("Error: wrong password!");
+            throw new WrongPasswordException();
         }
     }
 
@@ -81,8 +89,8 @@ public class LdapController {
         Hashtable env = new Hashtable();
 
         env.put(Context.SECURITY_AUTHENTICATION, "simple");
-        env.put(Context.SECURITY_PRINCIPAL, "cn=admin,dc=db,dc=test");
-        env.put(Context.SECURITY_CREDENTIALS, "12345");
+        env.put(Context.SECURITY_PRINCIPAL, "cn=" + adminName + "," + domain);
+        env.put(Context.SECURITY_CREDENTIALS, adminPass);
 
         return env;
     }
@@ -90,7 +98,7 @@ public class LdapController {
     public void createUser(String username, String password, String type) throws Exception{
         Hashtable env = getAdminEnv();
 
-        String dn = "uid=" + username + ",ou=" + type + ",dc=db,dc=test";
+        String dn = "uid=" + username + ",ou=" + type + "," + domain;
 
         Attribute newUid = new BasicAttribute("uid", username);
         Attribute pswd = new BasicAttribute("userPassword", password);
@@ -111,7 +119,9 @@ public class LdapController {
             ctx.close();
 
         }catch (javax.naming.NameAlreadyBoundException e){
-            throw new Exception("Error: user already exists!");
+            throw new UserAlreadyExistsException();
+        }catch (Exception e) {
+            throw new LdapException("Cannot create new user!");
         }
     }
 
@@ -119,7 +129,7 @@ public class LdapController {
         Hashtable env = getAdminEnv();
         String uid = getUid(username);
         if (uid == null){
-            throw new Exception("Error: username not exists!");
+            throw new WrongUsernameException();
         }
 
         DirContext ctx = null;
@@ -129,7 +139,7 @@ public class LdapController {
             ctx.close();
 
         }catch (Exception e){
-            e.printStackTrace();
+            throw new LdapException("Cannot delete user!");
         }
     }
 
@@ -137,7 +147,7 @@ public class LdapController {
         Hashtable env = getAdminEnv();
         String uid = getUid(username);
         if (uid == null){
-            throw new Exception("Error: username not exists!");
+            throw new WrongUsernameException();
         }
 
         DirContext ctx = null;
@@ -150,7 +160,7 @@ public class LdapController {
             ctx.close();
 
         }catch (Exception e){
-            e.printStackTrace();
+            throw new LdapException("Cannot change password!");
         }
     }
 }
