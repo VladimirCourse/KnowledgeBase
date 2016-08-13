@@ -1,0 +1,29 @@
+dn: uid=Komandir,ou=SuperUser,dc=db,dc=test
+uid: Komandir
+cn: Komandir
+objectClass: person
+userPassword: 12345
+
+dn: uid=Vertuhai,ou=SectionAdmin,dc=db,dc=test
+uid: Vertuhai
+objectClass: account
+objectClass: simpleSecurityObject
+userPassword: 54321
+
+dn: uid=Petyan,ou=User,dc=db,dc=test
+uid: Petyan 	
+objectClass: account
+objectClass: simpleSecurityObject
+userPassword: 11111
+
+dn: uid=Vasyan,ou=User,dc=db,dc=test
+uid: Vasyan 	
+objectClass: account
+objectClass: simpleSecurityObject
+userPassword: 22222
+
+dn: uid=Na4alnik,ou=SuperVisor,dc=db,dc=test
+uid: Na4alnik 	
+objectClass: account
+objectClass: simpleSecurityObject
+userPassword: 67890
