@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="fr.opensagres.xdocreport:xdocreport:1.0.5" type="repository">
+    <properties maven-id="fr.opensagres.xdocreport:xdocreport:1.0.5" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/fr/opensagres/xdocreport/xdocreport/1.0.5/xdocreport-1.0.5.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/org/osgi/org.osgi.core/4.2.0/org.osgi.core-4.2.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
