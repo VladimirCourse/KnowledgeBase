@@ -16,16 +16,17 @@
 import converter.ArticleConverter;
 import ldap.LdapController;
 
+import java.io.FileInputStream;
+
 public class Main {
 
     public static void main(String args[]) throws Exception {
 
        // String user = "Vasyan";
        // String password = "22222";
-        LdapController.getInstance().authenticate("New", "333");
-        ArticleConverter r = new ArticleConverter();
-        r.convert();
-        //LdapController.getInstance().createUser("New", "333", "SectionAdmin");
+      //  LdapController.getInstance().authorize("New", "3331");
+       // ArticleConverter.getInstance().convert(new FileInputStream("/home/vova/Project BZ/trash/docx/d.docx"));
+        LdapController.getInstance().createUser("New", "333", "SectionAdmin");
        // LdapController.getInstance().deleteUser("New");
         //test.changePass("New", "222");
         //test.authenticate("New", "333");

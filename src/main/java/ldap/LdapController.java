@@ -11,12 +11,14 @@ public class LdapController {
 
     private static volatile LdapController instance;
 
+    //params
     private final String ldapURI = "ldap://localhost";
     private final String contextFactory = "com.sun.jndi.ldap.LdapCtxFactory";
     private final String adminName = "admin";
     private final String adminPass = "12345";
     private final String domain = "dc=db,dc=test";
 
+    //singleton
     public static LdapController getInstance() {
         LdapController localInstance = instance;
         if (localInstance == null) {
@@ -30,14 +32,16 @@ public class LdapController {
         return localInstance;
     }
 
-    private DirContext ldapContext () throws Exception {
+    //form environment for context
+    private Hashtable<String,String> formEnvironment() throws Exception {
         Hashtable<String,String> env = new Hashtable <String,String>();
-        return ldapContext(env);
-    }
-
-    private DirContext ldapContext (Hashtable <String, String>env) throws Exception {
         env.put(Context.INITIAL_CONTEXT_FACTORY, contextFactory);
         env.put(Context.PROVIDER_URL, ldapURI);
+        return env;
+    }
+
+    //form context from environment
+    private DirContext formContext(Hashtable<String, String> env) throws Exception {
         DirContext ctx = null;
         try {
             ctx = new InitialDirContext(env);
@@ -47,79 +51,89 @@ public class LdapController {
         return ctx;
     }
 
-    private String getUid (String user) throws Exception {
-        DirContext ctx = ldapContext();
+    //form context with admin authorization
+    private DirContext formAdminContext() throws Exception {
+        Hashtable<String,String> env = formEnvironment();
+        env.put(Context.SECURITY_AUTHENTICATION, "simple");
+        env.put(Context.SECURITY_PRINCIPAL, "cn=" + adminName + "," + domain);
+        env.put(Context.SECURITY_CREDENTIALS, adminPass);
+        return formContext(env);
+    }
 
+    //form context with user authorization
+    private DirContext formAuthContext(String domain, String password) throws Exception {
+        Hashtable<String,String> env = formEnvironment();
+        env.put(Context.SECURITY_AUTHENTICATION, "simple");
+        env.put(Context.SECURITY_PRINCIPAL, domain);
+        env.put(Context.SECURITY_CREDENTIALS, password);
+        return formContext(env);
+    }
+
+    //find user domain by id
+    private String getUserDomain(String uid) throws Exception {
+        DirContext ctx = formContext(formEnvironment());
         //can be changed to cn
-        String filter = "(uid=" + user + ")";
+        String filter = "(uid=" + uid + ")";
+        //search user with uid
         SearchControls ctrl = new SearchControls();
         ctrl.setSearchScope(SearchControls.SUBTREE_SCOPE);
         NamingEnumeration answer = ctx.search(domain, filter, ctrl);
-
-        String dn;
+        //go through result
+        String resDomain;
         if (answer.hasMore()) {
             SearchResult result = (SearchResult) answer.next();
-            dn = result.getNameInNamespace();
+            resDomain = result.getNameInNamespace();
         }
         else {
-            dn = null;
+            resDomain = null;
         }
 
         answer.close();
-        return dn;
+        return resDomain;
     }
 
-    public void authenticate (String username, String password) throws Exception {
-        String uid = getUid(username);
-        if (uid == null){
+    //authorize user
+    public void authorize(String uid, String password) throws Exception {
+        //find user domain
+        String domain = getUserDomain(uid);
+        if (domain == null){
             throw new WrongUsernameException();
         }
-        Hashtable<String,String> env = new Hashtable <String, String>();
-        env.put(Context.SECURITY_AUTHENTICATION, "simple");
-        env.put(Context.SECURITY_PRINCIPAL, uid);
-        env.put(Context.SECURITY_CREDENTIALS, password);
-
+        //try authorize
         try {
-            ldapContext(env);
-        }
-        catch (javax.naming.AuthenticationException e) {
+            formAuthContext(domain, password);
+        }catch (javax.naming.AuthenticationException e) {
+            throw new WrongPasswordException();
+        }catch (javax.naming.OperationNotSupportedException e){
             throw new WrongPasswordException();
         }
     }
 
-    private Hashtable getAdminEnv(){
-        Hashtable env = new Hashtable();
+    //create new user
+    public void createUser(String uid, String password, String type) throws Exception{
+        if (password.length() == 0){
+            throw new LdapException("Cannot create new user!");
+        }
+        String userDomain = "uid=" + uid + ",ou=" + type + "," + domain;
+        //make attributes
+        Attribute uidAttr = new BasicAttribute("uid", uid);
+        Attribute passAttr = new BasicAttribute("userPassword", password);
+        Attribute ocAttr = new BasicAttribute("objectClass");
+        //type of object
+        ocAttr.add("account");
+        ocAttr.add("simpleSecurityObject");
 
-        env.put(Context.SECURITY_AUTHENTICATION, "simple");
-        env.put(Context.SECURITY_PRINCIPAL, "cn=" + adminName + "," + domain);
-        env.put(Context.SECURITY_CREDENTIALS, adminPass);
-
-        return env;
-    }
-
-    public void createUser(String username, String password, String type) throws Exception{
-        Hashtable env = getAdminEnv();
-
-        String dn = "uid=" + username + ",ou=" + type + "," + domain;
-
-        Attribute newUid = new BasicAttribute("uid", username);
-        Attribute pswd = new BasicAttribute("userPassword", password);
-        Attribute oc = new BasicAttribute("objectClass");
-        oc.add("account");
-        oc.add("simpleSecurityObject");
         DirContext ctx = null;
-
         try {
-            ctx = ldapContext(env);
-
+            ctx = formAdminContext();
+            //make entry
             BasicAttributes entry = new BasicAttributes();
-            entry.put(newUid);
-            entry.put(pswd);
-            entry.put(oc);
-
-            ctx.createSubcontext(dn, entry);
+            entry.put(uidAttr);
+            entry.put(passAttr);
+            entry.put(ocAttr);
+            //create subcontext from entry
+            ctx.createSubcontext(userDomain, entry);
             ctx.close();
-
         }catch (javax.naming.NameAlreadyBoundException e){
             throw new UserAlreadyExistsException();
         }catch (Exception e) {
@@ -127,40 +141,44 @@ public class LdapController {
         }
     }
 
-    public void deleteUser(String username) throws Exception{
-        Hashtable env = getAdminEnv();
-        String uid = getUid(username);
-        if (uid == null){
+    //delete user
+    public void deleteUser(String uid) throws Exception{
+        //find domain
+        String domain = getUserDomain(uid);
+        if (domain == null){
             throw new WrongUsernameException();
         }
-
         DirContext ctx = null;
         try {
-            ctx = ldapContext(env);
-            ctx.destroySubcontext(uid);
+            //authorize as admin
+            ctx = formAdminContext();
+            //delete user
+            ctx.destroySubcontext(domain);
             ctx.close();
-
         }catch (Exception e){
             throw new LdapException("Cannot delete user!");
         }
     }
-
-    public void changePass(String username, String password) throws Exception{
-        Hashtable env = getAdminEnv();
-        String uid = getUid(username);
-        if (uid == null){
+    //change user password
+    public void changePass(String uid, String password) throws Exception{
+        if (password.length() == 0){
+            throw new WrongPasswordException();
+        }
+        //form user domain
+        String domain = getUserDomain(uid);
+        if (domain == null){
             throw new WrongUsernameException();
         }
-
         DirContext ctx = null;
         try {
-            ctx = ldapContext(env);
+            //authorize as admin
+            ctx = formAdminContext();
+            //change password
             Attribute pswd = new BasicAttribute("userPassword", password);
             ModificationItem[] mods = new ModificationItem[1];
             mods[0] = new ModificationItem(DirContext.REPLACE_ATTRIBUTE, pswd);
-            ctx.modifyAttributes(uid, mods);
+            ctx.modifyAttributes(domain, mods);
             ctx.close();
-
         }catch (Exception e){
             throw new LdapException("Cannot change password!");
         }
